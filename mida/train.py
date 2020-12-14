@@ -6,20 +6,20 @@ from torch.utils.data import DataLoader
 from MIDA import Mida
 from data_processor import DataProcessor
 from sklearn.metrics import mean_squared_error
+import numpy as np
 
 
 def train(data_path, num_of_epochs=500):
     data_pros = DataProcessor(data_path)
     _, n_cols, train, test = data_pros.load_data()
     
-    missed_test, mask = data_pros.get_missed_data(test, missing_mechanism="MNAR", randomness="random")
-    
+    missed_test, mask = data_pros.get_missed_data(test, missing_mechanism="MNAR", randomness="uniform")
     missed_test = torch.from_numpy(missed_test).float() #pylint: disable=no-member
-    train = torch.from_numpy(train).float() #pylint: disable=no-member
+    
+    train = torch.from_numpy(train).float()
+    train_dataLoader = DataLoader(dataset=train, batch_size=128)
 
-    train_dataLoader = DataLoader(dataset=train, batch_size=1)
-
-    device = torch.device("cpu") #pylint: disable=no-member
+    device = torch.device("cpu")
     model = Mida(n = train.shape[1]).to(device)
 
     loss = nn.MSELoss()
@@ -45,7 +45,8 @@ def train(data_path, num_of_epochs=500):
 
             costs.append(cost.item())
         
-        print(f"Epoch {epoch + 1}, Loss: {cost.item()}")
+        if epoch % 10 == 0:
+            print(f"Epoch {epoch + 1}, Loss: {cost.item()}")
 
         if stop:
             break
@@ -55,7 +56,7 @@ def train(data_path, num_of_epochs=500):
     imputed = model(missed_test.to(device))
     imputed = imputed.cpu().detach().numpy()
 
-    total_rmse = 0
+    """
     for i in range(n_cols):
         if mask[:, i].sum() > 0:
             actual = test[:, i][mask[:, i]]
@@ -64,7 +65,14 @@ def train(data_path, num_of_epochs=500):
             total_rmse += math.sqrt(mean_squared_error(actual, pred))
 
     print(f"Result: {total_rmse}")
+    """
+    actual = test[mask]
+    pred = imputed[mask]
 
+    rmse = math.sqrt(mean_squared_error(actual, pred))
+
+    print(f"Result: {rmse}")
+    
     
 if __name__ == "__main__":
-    train("data/GL.csv")
+    train("Dataset/magic.csv")
